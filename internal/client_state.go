@@ -2,7 +2,8 @@ package internal
 
 import (
 	"strconv"
-	"strings"
+
+	Text "github.com/linkdotnet/golang-stringbuilder"
 )
 
 type ClientState struct {
@@ -26,17 +27,16 @@ func NewClientState(port int) *ClientState {
 }
 
 func (state *ClientState) BuildClientRequest(input string) string {
-	var builder strings.Builder
+	sb := Text.StringBuilder{}
 
-	builder.WriteString(CLIENT_REQUEST_PREFIX)
-	builder.WriteString(DELIMETER)
+	sb.Append(CLIENT_REQUEST_PREFIX)
+	sb.Append(DELIMETER)
+	sb.Append(input)
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(state.currentRequestNumber))
+	sb.Append(DELIMETER)
 
-	builder.WriteString(input)
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(strconv.Itoa(state.currentRequestNumber))
-	builder.WriteString(DELIMETER)
 	state.currentRequestNumber += 1
 
-	return builder.String()
+	return sb.ToString()
 }

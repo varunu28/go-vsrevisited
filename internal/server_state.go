@@ -2,7 +2,8 @@ package internal
 
 import (
 	"strconv"
-	"strings"
+
+	Text "github.com/linkdotnet/golang-stringbuilder"
 )
 
 const (
@@ -115,49 +116,39 @@ func (state *ServerState) RecordCommit(port int, response string) {
 }
 
 func (state *ServerState) BuildPrepareRequest(command string, requestNumber int, port int) string {
-	var builder strings.Builder
+	sb := Text.StringBuilder{}
 
-	builder.WriteString(PREPARE_REQUEST_PREFIX)
-	builder.WriteString(DELIMETER)
+	sb.Append(PREPARE_REQUEST_PREFIX)
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(state.viewNumber))
+	sb.Append(DELIMETER)
+	sb.Append(command)
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(requestNumber))
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(port))
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(state.operationNumber))
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(state.commitNumber))
+	sb.Append(DELIMETER)
 
-	builder.WriteString(strconv.Itoa(state.viewNumber))
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(command)
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(strconv.Itoa(requestNumber))
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(strconv.Itoa(port))
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(strconv.Itoa(state.operationNumber))
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(strconv.Itoa(state.commitNumber))
-	builder.WriteString(DELIMETER)
-
-	return builder.String()
+	return sb.ToString()
 }
 
 func (state *ServerState) BuildPrepareResponse(operationNumber int, port int) string {
-	var builder strings.Builder
+	sb := Text.StringBuilder{}
 
-	builder.WriteString(PREPARE_RESPONSE_PREFIX)
-	builder.WriteString(DELIMETER)
+	sb.Append(PREPARE_RESPONSE_PREFIX)
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(state.viewNumber))
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(operationNumber))
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(port))
+	sb.Append(DELIMETER)
+	sb.Append(strconv.Itoa(state.configuration[state.replicaNumber]))
+	sb.Append(DELIMETER)
 
-	builder.WriteString(strconv.Itoa(state.viewNumber))
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(strconv.Itoa(operationNumber))
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(strconv.Itoa(port))
-	builder.WriteString(DELIMETER)
-
-	builder.WriteString(strconv.Itoa(state.configuration[state.replicaNumber]))
-	builder.WriteString(DELIMETER)
-
-	return builder.String()
+	return sb.ToString()
 }
