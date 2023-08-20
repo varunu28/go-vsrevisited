@@ -1,5 +1,10 @@
 package internal
 
+import (
+	"strconv"
+	"strings"
+)
+
 type ClientState struct {
 	configuration        []int
 	clientId             int
@@ -18,4 +23,20 @@ func NewClientState(port int) *ClientState {
 		currentViewNumber:    0,
 		currentRequestNumber: 0,
 	}
+}
+
+func (state *ClientState) BuildClientRequest(input string) string {
+	var builder strings.Builder
+
+	builder.WriteString(CLIENT_REQUEST_PREFIX)
+	builder.WriteString(DELIMETER)
+
+	builder.WriteString(input)
+	builder.WriteString(DELIMETER)
+
+	builder.WriteString(strconv.Itoa(state.currentRequestNumber))
+	builder.WriteString(DELIMETER)
+	state.currentRequestNumber += 1
+
+	return builder.String()
 }

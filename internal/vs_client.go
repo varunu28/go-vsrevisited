@@ -31,7 +31,7 @@ func (client *VsClient) Start() {
 		if err != nil {
 			panic(err)
 		}
-		err = client.udp_handler.Send(input, 8000)
+		err = client.udp_handler.Send(client.state.BuildClientRequest(input), 8000)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
