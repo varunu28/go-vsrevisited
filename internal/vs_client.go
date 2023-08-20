@@ -9,6 +9,7 @@ import (
 type VsClient struct {
 	udp_handler *UdpHandler
 	reader      *bufio.Reader
+	state       *ClientState
 }
 
 func NewVsClient(port int) (*VsClient, error) {
@@ -20,6 +21,7 @@ func NewVsClient(port int) (*VsClient, error) {
 	return &VsClient{
 		udp_handler: udp_handler,
 		reader:      reader,
+		state:       NewClientState(port),
 	}, nil
 }
 

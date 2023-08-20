@@ -22,7 +22,7 @@ func main() {
 		}
 		client.Start()
 	} else if t == "server" {
-		server, err := internal.NewVrServer(port)
+		server, err := internal.NewVsServer(port)
 		if err != nil {
 			panic("error while creating new server" + err.Error())
 		}

@@ -2,28 +2,34 @@ package internal
 
 import "fmt"
 
-type VrServer struct {
-	udp_handler *UdpHandler
+type VsServer struct {
+	udpHandler *UdpHandler
+	state      *ServerState
 }
 
-func NewVrServer(port int) (*VrServer, error) {
-	udp_handler, err := NewUdpHandler(port)
+func NewVsServer(port int) (*VsServer, error) {
+	udpHandler, err := NewUdpHandler(port)
 	if err != nil {
 		return nil, err
 	}
-	return &VrServer{
-		udp_handler: udp_handler,
+	return &VsServer{
+		udpHandler: udpHandler,
+		state:      NewServerState(port),
 	}, nil
 }
 
-func (server *VrServer) Start() {
+func (server *VsServer) Start() {
 	for {
-		message, err := server.udp_handler.Receive()
+		message, err := server.udpHandler.Receive()
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println("received message: ", message)
-		response := "Received: " + message.Message
-		server.udp_handler.Send(response, message.FromPort)
+		go server.handleMessage(message)
 	}
+}
+
+func (server *VsServer) handleMessage(message UdpMessage) {
+	fmt.Println("received message: ", message)
+	response := "Received: " + message.Message
+	server.udpHandler.Send(response, message.FromPort)
 }
