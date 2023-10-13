@@ -6,12 +6,18 @@ import (
 	"os"
 )
 
+// VsClient is a wraper struct that is responsible for:
+// - Reading input from user through System input
+// - Sending message through UDP protocol
+// - Maintaining ClientState
 type VsClient struct {
 	udp_handler *UdpHandler
 	reader      *bufio.Reader
 	state       *ClientState
 }
 
+// NewVsClient creates an instance of VsClient on a specified port.
+// It returns an error if the creation fails.
 func NewVsClient(port int) (*VsClient, error) {
 	udp_handler, err := NewUdpHandler(port)
 	if err != nil {
@@ -25,16 +31,26 @@ func NewVsClient(port int) (*VsClient, error) {
 	}, nil
 }
 
+// Start runs an infinite loop which performs following steps in order:
+// - Reads input from user
+// - Sends a message to leader node through UDP
+// - Receives the response from leader
+// - Prints the response
 func (client *VsClient) Start() {
 	for {
+		// read user input
 		input, err := client.reader.ReadString('\n')
 		if err != nil {
 			panic(err)
 		}
+
+		// send message to leader node
 		err = client.udp_handler.Send(client.state.BuildClientRequest(input), 8000)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
+
+		// read response for message
 		message, err := client.udp_handler.Receive()
 		if err != nil {
 			fmt.Println(err.Error())

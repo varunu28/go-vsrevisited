@@ -12,12 +12,23 @@ const (
 	RECOVERING  = "recovering"
 )
 
+// ClientTableValue contains the client request, the number associated with the requested & response associated with the request if it is processed.
 type ClientTableValue struct {
 	Request       string
 	RequestNumber int
 	Response      string
 }
 
+// ServerState struct is tied to each replica. It consists of:
+// - configuration: Sorted array containing ports of all replicas
+// - viewNumber: current view number
+// - status: current status associated with the replica
+// - operationNumber: monotonically increasing counter associated to each request
+// - log: an array containing all requests. Size of log is same as that of operationNumber
+// - commitNumber: operationNumber associated with most recently committed operation
+// - clientTable: A hashmap to record the latest ClientTableValue for each client
+// - replicaNumber: index of replica in the configuration
+// - voteTable: A hashmap for recording votes for each client request. This is used to establish quorum for a client request
 type ServerState struct {
 	configuration   []int
 	viewNumber      int
@@ -30,6 +41,7 @@ type ServerState struct {
 	voteTable       map[int]map[int]bool
 }
 
+// NewServerState creates a new instance of ServerState on a given port number
 func NewServerState(port int) *ServerState {
 	var configuration [NUMBER_OF_NODES]int
 	var replicaNumber = 0
@@ -52,28 +64,14 @@ func NewServerState(port int) *ServerState {
 	}
 }
 
-func (state *ServerState) IsClientRequestValid(port int, requestNumber int) bool {
+// GetClientTableValue retrieves ClientTableValue for a client
+func (state *ServerState) GetClientTableValue(port int) (ClientTableValue, bool) {
 	val, exists := state.clientTable[port]
-	if !exists {
-		return true
-	}
-	if val.RequestNumber <= requestNumber {
-		return true
-	}
-	return false
+	return val, exists
 }
 
-func (state *ServerState) GetClientResponseByRequestNumber(port int, requestNumber int) (string, bool) {
-	val, exists := state.clientTable[port]
-	if !exists {
-		return "", false
-	}
-	if val.RequestNumber < requestNumber {
-		return "", false
-	}
-	return val.Response, true
-}
-
+// RecordRequest updates the server state for a new client request.
+// It is invoked either by leader replica for processing new client request or by replica nodes while processing PrepareRequest from leader node
 func (state *ServerState) RecordRequest(command string, requestNumber int, port int) {
 	// Increment operation number
 	state.operationNumber += 1
@@ -88,9 +86,10 @@ func (state *ServerState) RecordRequest(command string, requestNumber int, port 
 	state.clientTable[port] = *ctValue
 }
 
+// Broadcast is invoked by the leader node to send a message to all peer nodes.
 func (state *ServerState) Broadcast(command string, requestNumber int, port int, udpHandler *UdpHandler) {
 	state.voteTable[port] = make(map[int]bool)
-	prepareRequest := state.BuildPrepareRequest(command, requestNumber, port)
+	prepareRequest := state.buildPrepareRequest(command, requestNumber, port)
 	for i := 0; i < NUMBER_OF_NODES; i++ {
 		if i != state.replicaNumber {
 			udpHandler.Send(prepareRequest, STARTING_PORT+i)
@@ -98,13 +97,10 @@ func (state *ServerState) Broadcast(command string, requestNumber int, port int,
 	}
 }
 
+// RecordPrepareResponse records the response from a replica node & returns a boolean value representing if quorum has been reached
 func (state *ServerState) RecordPrepareResponse(port int, replicaId int) bool {
 	state.voteTable[port][replicaId] = true
 	return len(state.voteTable[port]) >= NUMBER_OF_NODES/2
-}
-
-func (state *ServerState) GetClientRequest(port int) string {
-	return state.clientTable[port].Request
 }
 
 func (state *ServerState) RecordCommit(port int, response string) {
@@ -113,42 +109,42 @@ func (state *ServerState) RecordCommit(port int, response string) {
 	// update client table
 	ctValue := state.clientTable[port]
 	ctValue.Response = response
+	state.clientTable[port] = ctValue
 }
 
-func (state *ServerState) BuildPrepareRequest(command string, requestNumber int, port int) string {
-	sb := Text.StringBuilder{}
-
-	sb.Append(PREPARE_REQUEST_PREFIX)
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(state.viewNumber))
-	sb.Append(DELIMETER)
-	sb.Append(command)
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(requestNumber))
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(port))
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(state.operationNumber))
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(state.commitNumber))
-	sb.Append(DELIMETER)
-
-	return sb.ToString()
-}
-
+// BuildPrepareResponse prepares a string representation for response of PrepareRequest
 func (state *ServerState) BuildPrepareResponse(operationNumber int, port int) string {
 	sb := Text.StringBuilder{}
 
-	sb.Append(PREPARE_RESPONSE_PREFIX)
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(state.viewNumber))
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(operationNumber))
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(port))
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(state.configuration[state.replicaNumber]))
-	sb.Append(DELIMETER)
+	return sb.Append(PREPARE_RESPONSE_PREFIX).
+		Append(DELIMETER).
+		Append(strconv.Itoa(state.viewNumber)).
+		Append(DELIMETER).
+		Append(strconv.Itoa(operationNumber)).
+		Append(DELIMETER).
+		Append(strconv.Itoa(port)).
+		Append(DELIMETER).
+		Append(strconv.Itoa(state.configuration[state.replicaNumber])).
+		Append(DELIMETER).
+		ToString()
+}
 
-	return sb.ToString()
+func (state *ServerState) buildPrepareRequest(command string, requestNumber int, port int) string {
+	sb := Text.StringBuilder{}
+
+	return sb.Append(PREPARE_REQUEST_PREFIX).
+		Append(DELIMETER).
+		Append(strconv.Itoa(state.viewNumber)).
+		Append(DELIMETER).
+		Append(command).
+		Append(DELIMETER).
+		Append(strconv.Itoa(requestNumber)).
+		Append(DELIMETER).
+		Append(strconv.Itoa(port)).
+		Append(DELIMETER).
+		Append(strconv.Itoa(state.operationNumber)).
+		Append(DELIMETER).
+		Append(strconv.Itoa(state.commitNumber)).
+		Append(DELIMETER).
+		ToString()
 }

@@ -6,6 +6,11 @@ import (
 	Text "github.com/linkdotnet/golang-stringbuilder"
 )
 
+// ClientState struct consists of the state that is maintained on the client side. It consists of:
+// - configuration: Sorted array containing ports of all replicas
+// - clientId: id associated with the client. In this implementation, we are using the port as clientId
+// - currentViewNumber: used to track the primary replica
+// - currentRequestNumber: A monotonically increasing integer that is associated with each client request
 type ClientState struct {
 	configuration        []int
 	clientId             int
@@ -13,6 +18,7 @@ type ClientState struct {
 	currentRequestNumber int
 }
 
+// NewClientState creates a new instance of ClientState on a particular port
 func NewClientState(port int) *ClientState {
 	var configuration [NUMBER_OF_NODES]int
 	for i := 0; i < NUMBER_OF_NODES; i++ {
@@ -26,6 +32,7 @@ func NewClientState(port int) *ClientState {
 	}
 }
 
+// BuildClientRequest is a utility function that creates a client request in the format expected by replica node.
 func (state *ClientState) BuildClientRequest(input string) string {
 	sb := Text.StringBuilder{}
 

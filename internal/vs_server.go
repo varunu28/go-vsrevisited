@@ -6,11 +6,15 @@ import (
 	"strings"
 )
 
+// VsServer is a struct used to communicate with client & peer nodes.
+// It is also responsible for maintaining the state associated with a replica
 type VsServer struct {
 	udpHandler *UdpHandler
 	state      *ServerState
 }
 
+// NewVsServer creates an instance of VsServer on a given port.
+// It returns an error if the creation process fails.
 func NewVsServer(port int) (*VsServer, error) {
 	udpHandler, err := NewUdpHandler(port)
 	if err != nil {
@@ -22,6 +26,7 @@ func NewVsServer(port int) (*VsServer, error) {
 	}, nil
 }
 
+// Start runs an infinite loop where it listens on its port & then processes any messages that it receives.
 func (server *VsServer) Start() {
 	for {
 		message, err := server.udpHandler.Receive()
@@ -61,17 +66,21 @@ func (server *VsServer) handleClientRequest(command string, currentRequestNumber
 		server.udpHandler.Send(SERVER_RESPONSE_PREFIX+DELIMETER+SERVER_RESPONSE_NON_NUMERIC_REQUEST_NUMBER, port)
 		return
 	}
-	if !server.state.IsClientRequestValid(port, reqNo) {
-		server.udpHandler.Send(SERVER_RESPONSE_PREFIX+DELIMETER+SERVER_RESPONSE_INVALID_REQUEST_NUMER, port)
-		return
-	}
-	// check if client table contains the request with requestId
-	existingResponse, exists := server.state.GetClientResponseByRequestNumber(port, reqNo)
+	// check the state of existing request in ClientTable for client
+	clientTableValue, exists := server.state.GetClientTableValue(port)
 	if exists {
-		if existingResponse != "" {
-			server.udpHandler.Send(SERVER_RESPONSE_PREFIX+DELIMETER+existingResponse, port)
+		// error for sending an already processed request number
+		if clientTableValue.RequestNumber > reqNo {
+			server.udpHandler.Send(SERVER_RESPONSE_PREFIX+DELIMETER+SERVER_RESPONSE_INVALID_REQUEST_NUMER, port)
+			return
 		}
-		return
+		if clientTableValue.RequestNumber == reqNo {
+			// send the processed response to client for the processed request
+			if clientTableValue.Response != "" {
+				server.udpHandler.Send(SERVER_RESPONSE_PREFIX+DELIMETER+clientTableValue.Response, port)
+			}
+			return
+		}
 	}
 	// Update client state
 	server.state.RecordRequest(command, reqNo, port)
@@ -86,7 +95,9 @@ func (server *VsServer) handlePrepareRequest(viewNumber int, command string, req
 	if operationNumber != server.state.operationNumber+1 {
 		return
 	}
+	// Update client state
 	server.state.RecordRequest(command, requestNumber, port)
+	// Send a vote acknowledging the request processing
 	server.udpHandler.Send(server.state.BuildPrepareResponse(operationNumber, port), fromPort)
 }
 
@@ -94,8 +105,12 @@ func (server *VsServer) handlePrepareResponse(viewNumber int, operationNumber in
 	quorum := server.state.RecordPrepareResponse(port, replicaId)
 	if quorum {
 		// perform the operation
-		request := server.state.GetClientRequest(port)
-		fmt.Println("Performing request: " + request)
+		clientTableValue, _ := server.state.GetClientTableValue(port)
+		// Don't process request if it is already processed. These are lagging nodes which are late to respond to PrepareRequest
+		if clientTableValue.Response != "" {
+			return
+		}
+		fmt.Println("Performing request: " + clientTableValue.Request + " RESPONSE: " + clientTableValue.Response)
 		response := "sample_response"
 
 		server.state.RecordCommit(port, response)
