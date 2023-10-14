@@ -47,3 +47,10 @@ func (state *ClientState) BuildClientRequest(input string) string {
 
 	return sb.ToString()
 }
+
+// Broadcast sends a UDP message to all the replica nodes
+func (state *ClientState) Broadcast(clientRequest string, udpHandler *UdpHandler) {
+	for i := 0; i < NUMBER_OF_NODES; i++ {
+		udpHandler.Send(clientRequest, STARTING_PORT+i)
+	}
+}

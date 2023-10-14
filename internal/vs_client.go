@@ -3,7 +3,9 @@ package internal
 import (
 	"bufio"
 	"fmt"
+	"net"
 	"os"
+	"time"
 )
 
 // VsClient is a wraper struct that is responsible for:
@@ -45,16 +47,31 @@ func (client *VsClient) Start() {
 		}
 
 		// send message to leader node
-		err = client.udp_handler.Send(client.state.BuildClientRequest(input), 8000)
+		clientRequest := client.state.BuildClientRequest(input)
+		err = client.udp_handler.Send(clientRequest, 8000)
 		if err != nil {
 			fmt.Println(err.Error())
+			continue
 		}
 
 		// read response for message
-		message, err := client.udp_handler.Receive()
-		if err != nil {
-			fmt.Println(err.Error())
+		client.receive(clientRequest)
+	}
+}
+
+func (client *VsClient) receive(clientRequest string) {
+	message, err := client.udp_handler.RecieveWithTimeout(1 * time.Second)
+	if err != nil {
+		// if timeout error
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			// broadcast to all nodes & receive
+			client.state.Broadcast(clientRequest, client.udp_handler)
+			// invoke receive
+			client.receive(clientRequest)
+		} else {
+			fmt.Println("error: ", err)
 		}
+	} else {
 		fmt.Println("response: " + message.Message)
 	}
 }

@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"fmt"
 	"net"
 	"strconv"
+	"time"
 )
 
 // UdpHandler is a wrapper on top of udp client used to send & receive messages
@@ -32,6 +34,24 @@ func NewUdpHandler(port int) (*UdpHandler, error) {
 
 	return &UdpHandler{
 		socket: conn,
+	}, nil
+}
+
+func (u *UdpHandler) RecieveWithTimeout(timeout time.Duration) (UdpMessage, error) {
+	err := u.socket.SetReadDeadline(time.Now().Add(timeout))
+	if err != nil {
+		fmt.Println("error setting deadline: ", err)
+	}
+	data := make([]byte, 1024)
+	_, addr, err := u.socket.ReadFromUDP(data)
+	if err != nil {
+		return UdpMessage{}, err
+	}
+
+	message := string(data)
+	return UdpMessage{
+		Message:  message,
+		FromPort: addr.Port,
 	}, nil
 }
 

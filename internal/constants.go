@@ -10,4 +10,5 @@ const (
 	SERVER_RESPONSE_INVALID_REQUEST_NUMER      = "invalid_request_number"
 	PREPARE_REQUEST_PREFIX                     = "prepare_request"
 	PREPARE_RESPONSE_PREFIX                    = "prepare_response"
+	COMMIT_MESSAGE_PREFIX                      = "commit_message"
 )

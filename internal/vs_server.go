@@ -42,6 +42,9 @@ func (server *VsServer) handleMessage(message UdpMessage) {
 	parts := strings.Split(message.Message, DELIMETER)
 	msgType := parts[0]
 	if msgType == CLIENT_REQUEST_PREFIX {
+		if server.state.viewNumber%NUMBER_OF_NODES != server.state.replicaNumber {
+			return
+		}
 		server.handleClientRequest(parts[1], parts[2], message.FromPort)
 	} else if msgType == PREPARE_REQUEST_PREFIX {
 		viewNumber, _ := strconv.Atoi(parts[1])
@@ -56,6 +59,11 @@ func (server *VsServer) handleMessage(message UdpMessage) {
 		port, _ := strconv.Atoi(parts[3])
 		replicaId, _ := strconv.Atoi(parts[4])
 		server.handlePrepareResponse(viewNumber, operationNumber, port, replicaId)
+	} else if msgType == COMMIT_MESSAGE_PREFIX {
+		viewNumber, _ := strconv.Atoi(parts[1])
+		requestNumber, _ := strconv.Atoi(parts[2])
+		port, _ := strconv.Atoi(parts[3])
+		server.handleCommitMessage(viewNumber, requestNumber, port)
 	}
 }
 
@@ -84,8 +92,11 @@ func (server *VsServer) handleClientRequest(command string, currentRequestNumber
 	}
 	// Update client state
 	server.state.RecordRequest(command, reqNo, port)
+	server.state.InitializeVoteTable(port)
+
 	// Broadcast for vote
-	server.state.Broadcast(command, reqNo, port, server.udpHandler)
+	prepareRequest := server.state.BuildPrepareRequest(command, reqNo, port)
+	server.state.Broadcast(prepareRequest, server.udpHandler)
 }
 
 func (server *VsServer) handlePrepareRequest(viewNumber int, command string, requestNumber int, port int, operationNumber int, commitNumber int, fromPort int) {
@@ -110,12 +121,38 @@ func (server *VsServer) handlePrepareResponse(viewNumber int, operationNumber in
 		if clientTableValue.Response != "" {
 			return
 		}
-		fmt.Println("Performing request: " + clientTableValue.Request + " RESPONSE: " + clientTableValue.Response)
-		response := "sample_response"
 
+		// perform commit
+		response := server.performServerOperation(clientTableValue.Request)
 		server.state.RecordCommit(port, response)
 
 		// send response to client
 		server.udpHandler.Send(SERVER_RESPONSE_PREFIX+DELIMETER+response, port)
+
+		// Broadcast about commit
+		commitMessage := server.state.BuildCommitMessage()
+		server.state.Broadcast(commitMessage, server.udpHandler)
 	}
+}
+
+func (server *VsServer) handleCommitMessage(viewNumber int, requestNumber int, port int) {
+	if viewNumber != server.state.viewNumber {
+		return
+	}
+	clientTableValue, exists := server.state.GetClientTableValue(port)
+	if exists {
+		if clientTableValue.RequestNumber != requestNumber {
+			fmt.Printf("got out of range request number. got %d current %d\n", requestNumber, clientTableValue.RequestNumber)
+			return
+		}
+		// perform commit
+		response := server.performServerOperation(clientTableValue.Request)
+		server.state.RecordCommit(port, response)
+	}
+}
+
+func (server *VsServer) performServerOperation(request string) string {
+	response := "sample_response"
+	fmt.Println("Performing request: " + request + " RESPONSE: " + response)
+	return response
 }

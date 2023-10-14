@@ -86,13 +86,15 @@ func (state *ServerState) RecordRequest(command string, requestNumber int, port 
 	state.clientTable[port] = *ctValue
 }
 
-// Broadcast is invoked by the leader node to send a message to all peer nodes.
-func (state *ServerState) Broadcast(command string, requestNumber int, port int, udpHandler *UdpHandler) {
-	state.voteTable[port] = make(map[int]bool)
-	prepareRequest := state.buildPrepareRequest(command, requestNumber, port)
+func (state *ServerState) InitializeVoteTable(clientPort int) {
+	state.voteTable[clientPort] = make(map[int]bool)
+}
+
+// Broadcast is invoked by the leader node to send a message to all peer nodes except itself.
+func (state *ServerState) Broadcast(message string, udpHandler *UdpHandler) {
 	for i := 0; i < NUMBER_OF_NODES; i++ {
 		if i != state.replicaNumber {
-			udpHandler.Send(prepareRequest, STARTING_PORT+i)
+			udpHandler.Send(message, STARTING_PORT+i)
 		}
 	}
 }
@@ -129,7 +131,8 @@ func (state *ServerState) BuildPrepareResponse(operationNumber int, port int) st
 		ToString()
 }
 
-func (state *ServerState) buildPrepareRequest(command string, requestNumber int, port int) string {
+// BuildPrepareRequest prepares a string represenatation of leader node's prepare request
+func (state *ServerState) BuildPrepareRequest(command string, requestNumber int, port int) string {
 	sb := Text.StringBuilder{}
 
 	return sb.Append(PREPARE_REQUEST_PREFIX).
@@ -147,4 +150,11 @@ func (state *ServerState) buildPrepareRequest(command string, requestNumber int,
 		Append(strconv.Itoa(state.commitNumber)).
 		Append(DELIMETER).
 		ToString()
+}
+
+// BuildCommitMessage prepares a string representation of leader node's commit message
+func (state *ServerState) BuildCommitMessage() string {
+	sb := Text.StringBuilder{}
+
+	return sb.Append(COMMIT_MESSAGE_PREFIX).ToString()
 }
