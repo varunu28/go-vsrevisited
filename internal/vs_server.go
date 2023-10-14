@@ -130,7 +130,7 @@ func (server *VsServer) handlePrepareResponse(viewNumber int, operationNumber in
 		server.udpHandler.Send(SERVER_RESPONSE_PREFIX+DELIMETER+response, port)
 
 		// Broadcast about commit
-		commitMessage := server.state.BuildCommitMessage()
+		commitMessage := server.state.BuildCommitMessage(clientTableValue.RequestNumber, port)
 		server.state.Broadcast(commitMessage, server.udpHandler)
 	}
 }

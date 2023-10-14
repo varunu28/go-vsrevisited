@@ -153,8 +153,15 @@ func (state *ServerState) BuildPrepareRequest(command string, requestNumber int,
 }
 
 // BuildCommitMessage prepares a string representation of leader node's commit message
-func (state *ServerState) BuildCommitMessage() string {
+func (state *ServerState) BuildCommitMessage(requestNumber int, port int) string {
 	sb := Text.StringBuilder{}
 
-	return sb.Append(COMMIT_MESSAGE_PREFIX).ToString()
+	return sb.Append(COMMIT_MESSAGE_PREFIX).
+		Append(DELIMETER).
+		Append(strconv.Itoa(state.viewNumber)).
+		Append(DELIMETER).
+		Append(strconv.Itoa(requestNumber)).
+		Append(DELIMETER).
+		Append(strconv.Itoa(port)).
+		ToString()
 }
