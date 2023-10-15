@@ -2,18 +2,21 @@ package internal
 
 import (
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // VsServer is a struct used to communicate with client & peer nodes.
 // It is also responsible for maintaining the state associated with a replica
 type VsServer struct {
-	udpHandler *UdpHandler
-	state      *ServerState
-	database   *Database
-	mu         sync.Mutex
+	udpHandler    *UdpHandler
+	state         *ServerState
+	database      *Database
+	serverTimeout *ServerTimeout
+	mu            sync.Mutex
 }
 
 // NewVsServer creates an instance of VsServer on a given port.
@@ -23,16 +26,23 @@ func NewVsServer(port int) (*VsServer, error) {
 	if err != nil {
 		return nil, err
 	}
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	timeoutInterval := rand.Intn(int(MAX_TIMEOUT)-int(MIN_TIMEOUT)) + int(MIN_TIMEOUT)
+	fmt.Println("timeout: ", timeoutInterval)
+	serverTimeout := NewServerTimeout(timeoutInterval)
+
 	return &VsServer{
-		udpHandler: udpHandler,
-		state:      NewServerState(port),
-		database:   NewDatabase(),
-		mu:         sync.Mutex{},
+		udpHandler:    udpHandler,
+		state:         NewServerState(port),
+		database:      NewDatabase(),
+		serverTimeout: serverTimeout,
+		mu:            sync.Mutex{},
 	}, nil
 }
 
 // Start runs an infinite loop where it listens on its port & then processes any messages that it receives.
 func (server *VsServer) Start() {
+	go server.serverTimer()
 	for {
 		message, err := server.udpHandler.Receive()
 		if err != nil {
@@ -47,7 +57,7 @@ func (server *VsServer) handleMessage(message UdpMessage) {
 	parts := strings.Split(message.Message, DELIMETER)
 	msgType := parts[0]
 	if msgType == CLIENT_REQUEST_PREFIX {
-		if server.state.viewNumber%NUMBER_OF_NODES != server.state.replicaNumber {
+		if !server.isLeader() {
 			return
 		}
 		server.handleClientRequest(parts[1], parts[2], message.FromPort)
@@ -108,6 +118,9 @@ func (server *VsServer) handlePrepareRequest(viewNumber int, command string, req
 	if viewNumber != server.state.viewNumber {
 		return
 	}
+	// reset timeout as we received a ping from leader replica
+	server.serverTimeout.Reset <- struct{}{}
+
 	if operationNumber != server.state.operationNumber+1 {
 		return
 	}
@@ -150,6 +163,9 @@ func (server *VsServer) handleCommitMessage(viewNumber int, requestNumber int, p
 	if viewNumber != server.state.viewNumber {
 		return
 	}
+	// reset timeout as we received a ping from leader replica
+	server.serverTimeout.Reset <- struct{}{}
+
 	clientTableValue, exists := server.state.GetClientTableValue(port)
 	if exists {
 		if clientTableValue.RequestNumber != requestNumber {
@@ -166,4 +182,24 @@ func (server *VsServer) performServerOperation(request string) string {
 	response := server.database.PerformOperation(request)
 	fmt.Println("Performing request: " + request + " RESPONSE: " + response)
 	return response
+}
+
+func (server *VsServer) serverTimer() {
+	for {
+		select {
+		case <-server.serverTimeout.Timeout.C:
+			if server.isLeader() {
+				server.serverTimeout.Reset <- struct{}{}
+			} else {
+				// perform view change
+				fmt.Println("server timed out")
+			}
+		case <-server.serverTimeout.Reset:
+			server.serverTimeout.Timeout.Reset(time.Duration(server.serverTimeout.TimeoutInterval) * time.Millisecond)
+		}
+	}
+}
+
+func (server *VsServer) isLeader() bool {
+	return server.state.viewNumber%NUMBER_OF_NODES == server.state.replicaNumber
 }

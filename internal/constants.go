@@ -14,4 +14,6 @@ const (
 	INVALID_DATABASE_REQUEST                   = "invalid_database_request"
 	VALUE_DOES_NOT_EXIST                       = "value_does_not_exist"
 	UPDATE_PERFORMED_SUCCESSFULLY              = "update_performed_successfully"
+	MIN_TIMEOUT                                = 10001
+	MAX_TIMEOUT                                = 20000
 )
