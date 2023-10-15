@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // VsServer is a struct used to communicate with client & peer nodes.
@@ -11,6 +12,8 @@ import (
 type VsServer struct {
 	udpHandler *UdpHandler
 	state      *ServerState
+	database   *Database
+	mu         sync.Mutex
 }
 
 // NewVsServer creates an instance of VsServer on a given port.
@@ -23,6 +26,8 @@ func NewVsServer(port int) (*VsServer, error) {
 	return &VsServer{
 		udpHandler: udpHandler,
 		state:      NewServerState(port),
+		database:   NewDatabase(),
+		mu:         sync.Mutex{},
 	}, nil
 }
 
@@ -115,6 +120,12 @@ func (server *VsServer) handlePrepareRequest(viewNumber int, command string, req
 func (server *VsServer) handlePrepareResponse(viewNumber int, operationNumber int, port int, replicaId int) {
 	quorum := server.state.RecordPrepareResponse(port, replicaId)
 	if quorum {
+		// locking is required as we can get concurrent prepare response and we want to perform the commit & broadcast about it at most once
+		// Hence while checking the existing response & updating the response, locking allows only one request to go through the commit & broadcast phase
+		// When the next thread acquires the thread post commit, it will see the existing response as non-empty & return instead of performing duplicate commit & broadcast
+		server.mu.Lock()
+		defer server.mu.Unlock()
+
 		// perform the operation
 		clientTableValue, _ := server.state.GetClientTableValue(port)
 		// Don't process request if it is already processed. These are lagging nodes which are late to respond to PrepareRequest
@@ -152,7 +163,7 @@ func (server *VsServer) handleCommitMessage(viewNumber int, requestNumber int, p
 }
 
 func (server *VsServer) performServerOperation(request string) string {
-	response := "sample_response"
+	response := server.database.PerformOperation(request)
 	fmt.Println("Performing request: " + request + " RESPONSE: " + response)
 	return response
 }

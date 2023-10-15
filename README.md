@@ -7,5 +7,8 @@ Golang implementation of Viewstamped Replication revisited protocol
  - [X] Update server code to only respond to client request if they are the leader
  - [X] Add check to figure out if a node is a leader even after multiple view changes (IF viewNumber % NUMBER_OF_NODES == replicaNumber)
  - [X] Add code to send a commit message after receiving quorum
+ - [X] Add a key-value store for server code
+ - [ ] Add mechanism to buffer request in case replica node is out of date
+ - [ ] Add mechanism to catch up if replica node is out of date along with state change
+ - [ ] Add mechanism for clearing the buffer with state change
  - [ ] Add a timeout on replica side to check primary node's liveness
- - [ ] Add a key-value store for server code
