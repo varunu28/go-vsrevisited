@@ -9,6 +9,7 @@ Golang implementation of Viewstamped Replication revisited protocol
  - [X] Add code to send a commit message after receiving quorum
  - [X] Add a key-value store for server code
  - [X] Add a timeout on replica side to check primary node's liveness
- - [ ] Add mechanism to buffer request in case replica node is out of date
- - [ ] Add mechanism to catch up if replica node is out of date along with state change
- - [ ] Add mechanism for clearing the buffer with state change
+ - [X] Add mechanism to buffer request in case replica node is out of date
+ - [X] Add mechanism to catch up if replica node is out of date along with state change
+ - [X] Add mechanism for clearing the buffer with state change
+ - [ ] Add view change mechanism in case of server timeout

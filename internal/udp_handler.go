@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"strconv"
@@ -48,7 +49,7 @@ func (u *UdpHandler) RecieveWithTimeout(timeout time.Duration) (UdpMessage, erro
 		return UdpMessage{}, err
 	}
 
-	message := string(data)
+	message := string(bytes.Trim(data, "\x00"))
 	return UdpMessage{
 		Message:  message,
 		FromPort: addr.Port,
@@ -63,7 +64,7 @@ func (u *UdpHandler) Receive() (UdpMessage, error) {
 		return UdpMessage{}, err
 	}
 
-	message := string(data)
+	message := string(bytes.Trim(data, "\x00"))
 	return UdpMessage{
 		Message:  message,
 		FromPort: addr.Port,

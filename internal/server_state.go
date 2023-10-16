@@ -2,14 +2,9 @@ package internal
 
 import (
 	"strconv"
+	"strings"
 
 	Text "github.com/linkdotnet/golang-stringbuilder"
-)
-
-const (
-	NORMAL      = "normal"
-	VIEW_CHANGE = "view change"
-	RECOVERING  = "recovering"
 )
 
 // ClientTableValue contains the client request, the number associated with the requested & response associated with the request if it is processed.
@@ -76,7 +71,13 @@ func (state *ServerState) RecordRequest(command string, requestNumber int, port 
 	// Increment operation number
 	state.operationNumber += 1
 	// Add request to log
-	state.log = append(state.log, command)
+	entry := Text.NewStringBuilderFromString(command).
+		Append(LOG_DELIMETER).
+		AppendInt(requestNumber).
+		Append(LOG_DELIMETER).
+		AppendInt(port).
+		ToString()
+	state.log = append(state.log, entry)
 	// Update client table
 	ctValue := &ClientTableValue{
 		Request:       command,
@@ -127,7 +128,6 @@ func (state *ServerState) BuildPrepareResponse(operationNumber int, port int) st
 		Append(strconv.Itoa(port)).
 		Append(DELIMETER).
 		Append(strconv.Itoa(state.configuration[state.replicaNumber])).
-		Append(DELIMETER).
 		ToString()
 }
 
@@ -148,7 +148,6 @@ func (state *ServerState) BuildPrepareRequest(command string, requestNumber int,
 		Append(strconv.Itoa(state.operationNumber)).
 		Append(DELIMETER).
 		Append(strconv.Itoa(state.commitNumber)).
-		Append(DELIMETER).
 		ToString()
 }
 
@@ -164,4 +163,35 @@ func (state *ServerState) BuildCommitMessage(requestNumber int, port int) string
 		Append(DELIMETER).
 		Append(strconv.Itoa(port)).
 		ToString()
+}
+
+// BuildCatchupRequest prepares a string representation of replica node's catchup request
+func (state *ServerState) BuildCatchupRequest(operationNumber int) string {
+	sb := Text.StringBuilder{}
+
+	return sb.Append(CATCHUP_REQUEST_PREFIX).
+		Append(DELIMETER).
+		AppendInt(state.operationNumber).
+		Append(DELIMETER).
+		AppendInt(operationNumber).
+		ToString()
+}
+
+// BuildCatchupResponse prepares a string representation of catchup response
+func (state *ServerState) BuildCatchupResponse(replicaOperationNumber int, laggingOperationNumber int) string {
+	sb := Text.StringBuilder{}
+
+	return sb.
+		Append(CATCHUP_RESPONSE_PREFIX).
+		Append(DELIMETER).
+		Append(strings.Join(state.log[replicaOperationNumber:laggingOperationNumber], ",")).
+		ToString()
+}
+
+func (state *ServerState) UpdateStatus(status string) {
+	state.status = status
+}
+
+func (state *ServerState) GetStatus() string {
+	return state.status
 }

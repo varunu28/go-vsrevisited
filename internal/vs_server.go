@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+type bufferedRequest struct {
+	command       string
+	requestNumber int
+	clientPort    int
+	commitNumber  int
+	serverPort    int
+}
+
 // VsServer is a struct used to communicate with client & peer nodes.
 // It is also responsible for maintaining the state associated with a replica
 type VsServer struct {
@@ -16,6 +24,7 @@ type VsServer struct {
 	state         *ServerState
 	database      *Database
 	serverTimeout *ServerTimeout
+	requestBuffer []bufferedRequest
 	mu            sync.Mutex
 }
 
@@ -36,6 +45,7 @@ func NewVsServer(port int) (*VsServer, error) {
 		state:         NewServerState(port),
 		database:      NewDatabase(),
 		serverTimeout: serverTimeout,
+		requestBuffer: make([]bufferedRequest, 0),
 		mu:            sync.Mutex{},
 	}, nil
 }
@@ -53,7 +63,7 @@ func (server *VsServer) Start() {
 }
 
 func (server *VsServer) handleMessage(message UdpMessage) {
-	fmt.Println("received message: ", message)
+	fmt.Println("received message: ", message.Message)
 	parts := strings.Split(message.Message, DELIMETER)
 	msgType := parts[0]
 	if msgType == CLIENT_REQUEST_PREFIX {
@@ -79,6 +89,16 @@ func (server *VsServer) handleMessage(message UdpMessage) {
 		requestNumber, _ := strconv.Atoi(parts[2])
 		port, _ := strconv.Atoi(parts[3])
 		server.handleCommitMessage(viewNumber, requestNumber, port)
+	} else if msgType == CATCHUP_REQUEST_PREFIX {
+		repOpNo, _ := strconv.Atoi(parts[1])
+		lagOpNo, err := strconv.Atoi(parts[2])
+		if err != nil {
+			fmt.Println("ERROR: ", err.Error())
+		}
+		server.handleCatchupMessage(repOpNo, lagOpNo, message.FromPort)
+	} else if msgType == CATCHUP_RESPONSE_PREFIX {
+		backupLogs := strings.Split(parts[1], ",")
+		server.processBackupLogs(backupLogs)
 	}
 }
 
@@ -120,14 +140,41 @@ func (server *VsServer) handlePrepareRequest(viewNumber int, command string, req
 	}
 	// reset timeout as we received a ping from leader replica
 	server.serverTimeout.Reset <- struct{}{}
-
-	if operationNumber != server.state.operationNumber+1 {
+	// if replica is in recovery state then add the request to buffer
+	if server.state.GetStatus() == RECOVERING {
+		buffReq := &bufferedRequest{
+			command:       command,
+			requestNumber: requestNumber,
+			clientPort:    port,
+			commitNumber:  commitNumber,
+			serverPort:    fromPort,
+		}
+		server.requestBuffer = append(server.requestBuffer, *buffReq)
 		return
 	}
-	// Update client state
-	server.state.RecordRequest(command, requestNumber, port)
-	// Send a vote acknowledging the request processing
-	server.udpHandler.Send(server.state.BuildPrepareResponse(operationNumber, port), fromPort)
+
+	if operationNumber == server.state.operationNumber+1 {
+		// Update client state
+		server.state.RecordRequest(command, requestNumber, port)
+		// Send a vote acknowledging the request processing
+		server.udpHandler.Send(server.state.BuildPrepareResponse(operationNumber, port), fromPort)
+	} else if operationNumber > server.state.operationNumber+1 {
+		// update state to catching up
+		server.state.UpdateStatus(RECOVERING)
+
+		// push request to request_buffer
+		buffReq := &bufferedRequest{
+			command:       command,
+			requestNumber: requestNumber,
+			clientPort:    port,
+			commitNumber:  commitNumber,
+			serverPort:    fromPort,
+		}
+		server.requestBuffer = append(server.requestBuffer, *buffReq)
+
+		// send catch up request to leader
+		server.udpHandler.Send(server.state.BuildCatchupRequest(operationNumber), fromPort)
+	}
 }
 
 func (server *VsServer) handlePrepareResponse(viewNumber int, operationNumber int, port int, replicaId int) {
@@ -176,6 +223,27 @@ func (server *VsServer) handleCommitMessage(viewNumber int, requestNumber int, p
 		response := server.performServerOperation(clientTableValue.Request)
 		server.state.RecordCommit(port, response)
 	}
+}
+
+func (server *VsServer) handleCatchupMessage(replicaOperationNumber int, laggingOperationNumber int, fromPort int) {
+	server.udpHandler.Send(server.state.BuildCatchupResponse(replicaOperationNumber, laggingOperationNumber), fromPort)
+}
+
+func (server *VsServer) processBackupLogs(logs []string) {
+	for _, log := range logs {
+		splits := strings.Split(log, LOG_DELIMETER)
+		reqNo, _ := strconv.Atoi(splits[1])
+		port, _ := strconv.Atoi(splits[2])
+		server.state.RecordRequest(splits[0], reqNo, port)
+	}
+	// process backed up requests
+	for _, entry := range server.requestBuffer {
+		server.state.RecordRequest(entry.command, entry.requestNumber, entry.clientPort)
+	}
+	// clear the buffer
+	server.requestBuffer = []bufferedRequest{}
+	// update status
+	server.state.UpdateStatus(NORMAL)
 }
 
 func (server *VsServer) performServerOperation(request string) string {
