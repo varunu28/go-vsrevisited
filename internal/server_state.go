@@ -109,11 +109,15 @@ func (state *ServerState) RecordPrepareResponse(port int, replicaId int) bool {
 
 func (state *ServerState) RecordCommit(port int, response string) {
 	// increment commit number
-	state.commitNumber += 1
+	state.IncrementCommitNumber()
 	// update client table
 	ctValue := state.clientTable[port]
 	ctValue.Response = response
 	state.clientTable[port] = ctValue
+}
+
+func (state *ServerState) IncrementCommitNumber() {
+	state.commitNumber += 1
 }
 
 // BuildPrepareResponse prepares a string representation for response of PrepareRequest
@@ -185,7 +189,9 @@ func (state *ServerState) BuildCatchupResponse(replicaOperationNumber int, laggi
 	return sb.
 		Append(CATCHUP_RESPONSE_PREFIX).
 		Append(DELIMETER).
-		Append(strings.Join(state.log[replicaOperationNumber:laggingOperationNumber], ",")).
+		AppendInt(state.commitNumber).
+		Append(DELIMETER).
+		Append(strings.Join(state.log[replicaOperationNumber:laggingOperationNumber-1], ",")).
 		ToString()
 }
 

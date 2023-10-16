@@ -37,7 +37,6 @@ func NewVsServer(port int) (*VsServer, error) {
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	timeoutInterval := rand.Intn(int(MAX_TIMEOUT)-int(MIN_TIMEOUT)) + int(MIN_TIMEOUT)
-	fmt.Println("timeout: ", timeoutInterval)
 	serverTimeout := NewServerTimeout(timeoutInterval)
 
 	return &VsServer{
@@ -91,14 +90,12 @@ func (server *VsServer) handleMessage(message UdpMessage) {
 		server.handleCommitMessage(viewNumber, requestNumber, port)
 	} else if msgType == CATCHUP_REQUEST_PREFIX {
 		repOpNo, _ := strconv.Atoi(parts[1])
-		lagOpNo, err := strconv.Atoi(parts[2])
-		if err != nil {
-			fmt.Println("ERROR: ", err.Error())
-		}
+		lagOpNo, _ := strconv.Atoi(parts[2])
 		server.handleCatchupMessage(repOpNo, lagOpNo, message.FromPort)
 	} else if msgType == CATCHUP_RESPONSE_PREFIX {
-		backupLogs := strings.Split(parts[1], ",")
-		server.processBackupLogs(backupLogs)
+		commitNo, _ := strconv.Atoi(parts[1])
+		backupLogs := strings.Split(parts[2], ",")
+		server.processBackupLogs(backupLogs, commitNo)
 	}
 }
 
@@ -213,6 +210,10 @@ func (server *VsServer) handleCommitMessage(viewNumber int, requestNumber int, p
 	// reset timeout as we received a ping from leader replica
 	server.serverTimeout.Reset <- struct{}{}
 
+	if server.state.GetStatus() == RECOVERING {
+		return
+	}
+
 	clientTableValue, exists := server.state.GetClientTableValue(port)
 	if exists {
 		if clientTableValue.RequestNumber != requestNumber {
@@ -229,7 +230,7 @@ func (server *VsServer) handleCatchupMessage(replicaOperationNumber int, lagging
 	server.udpHandler.Send(server.state.BuildCatchupResponse(replicaOperationNumber, laggingOperationNumber), fromPort)
 }
 
-func (server *VsServer) processBackupLogs(logs []string) {
+func (server *VsServer) processBackupLogs(logs []string, commitNumber int) {
 	for _, log := range logs {
 		splits := strings.Split(log, LOG_DELIMETER)
 		reqNo, _ := strconv.Atoi(splits[1])
@@ -242,13 +243,27 @@ func (server *VsServer) processBackupLogs(logs []string) {
 	}
 	// clear the buffer
 	server.requestBuffer = []bufferedRequest{}
+	// get updated on latest commit
+	for i := 0; i < commitNumber; i++ {
+		log := server.state.log[i]
+		splits := strings.Split(log, LOG_DELIMETER)
+		command := splits[0]
+		reqNo, _ := strconv.Atoi(splits[1])
+		port, _ := strconv.Atoi(splits[2])
+		response := server.performServerOperation(command)
+		ctValue, _ := server.state.GetClientTableValue(port)
+		if ctValue.RequestNumber == reqNo {
+			server.state.RecordCommit(port, response)
+		} else {
+			server.state.IncrementCommitNumber()
+		}
+	}
 	// update status
 	server.state.UpdateStatus(NORMAL)
 }
 
 func (server *VsServer) performServerOperation(request string) string {
 	response := server.database.PerformOperation(request)
-	fmt.Println("Performing request: " + request + " RESPONSE: " + response)
 	return response
 }
 
