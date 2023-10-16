@@ -41,7 +41,6 @@ func (state *ClientState) BuildClientRequest(input string) string {
 	sb.Append(input)
 	sb.Append(DELIMETER)
 	sb.Append(strconv.Itoa(state.currentRequestNumber))
-	sb.Append(DELIMETER)
 
 	state.currentRequestNumber += 1
 

@@ -71,7 +71,8 @@ func (state *ServerState) RecordRequest(command string, requestNumber int, port 
 	// Increment operation number
 	state.operationNumber += 1
 	// Add request to log
-	entry := Text.NewStringBuilderFromString(command).
+	sb := Text.StringBuilder{}
+	entry := sb.Append(command).
 		Append(LOG_DELIMETER).
 		AppendInt(requestNumber).
 		Append(LOG_DELIMETER).

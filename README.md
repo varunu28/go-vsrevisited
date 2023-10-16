@@ -12,4 +12,5 @@ Golang implementation of Viewstamped Replication revisited protocol
  - [X] Add mechanism to buffer request in case replica node is out of date
  - [X] Add mechanism to catch up if replica node is out of date along with state change
  - [X] Add mechanism for clearing the buffer with state change
+ - [ ] Add code for committing operations either in request or commit phase
  - [ ] Add view change mechanism in case of server timeout
