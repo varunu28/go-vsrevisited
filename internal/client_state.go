@@ -53,3 +53,11 @@ func (state *ClientState) Broadcast(clientRequest string, udpHandler *UdpHandler
 		udpHandler.Send(clientRequest, STARTING_PORT+i)
 	}
 }
+
+func (state *ClientState) RecordViewNumber(viewNumber int) {
+	state.currentViewNumber = viewNumber
+}
+
+func (state *ClientState) GetLeaderPort() int {
+	return STARTING_PORT + state.currentViewNumber%NUMBER_OF_NODES
+}

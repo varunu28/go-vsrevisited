@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -48,7 +50,7 @@ func (client *VsClient) Start() {
 
 		// send message to leader node
 		clientRequest := client.state.BuildClientRequest(input)
-		err = client.udp_handler.Send(clientRequest, 8000)
+		err = client.udp_handler.Send(clientRequest, client.state.GetLeaderPort())
 		if err != nil {
 			fmt.Println(err.Error())
 			continue
@@ -72,6 +74,10 @@ func (client *VsClient) receive(clientRequest string) {
 			fmt.Println("error: ", err)
 		}
 	} else {
-		fmt.Println("response: " + message.Message)
+		parts := strings.Split(message.Message, DELIMETER)
+		viewNumber, _ := strconv.Atoi(parts[1])
+		response := parts[2]
+		client.state.RecordViewNumber(viewNumber)
+		fmt.Println("response: " + response)
 	}
 }

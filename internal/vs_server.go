@@ -103,16 +103,6 @@ func (server *VsServer) handleMessage(message UdpMessage) {
 	} else if msgType == DO_VIEW_CHANGE_PREFIX {
 		server.processDoViewChangeMessage(message.Message, message.FromPort)
 	} else if msgType == START_VIEW_PREFIX {
-		// return sb.Append(START_VIEW_PREFIX).
-		// Append(DELIMETER).
-		// AppendInt(state.operationNumber).
-		// Append(DELIMETER).
-		// AppendInt(state.viewNumber).
-		// Append(DELIMETER).
-		// AppendInt(state.commitNumber).
-		// Append(DELIMETER).
-		// Append(strings.Join(state.log, ",")).
-		// ToString()
 		operationNumber, _ := strconv.Atoi(parts[1])
 		viewNumber, _ := strconv.Atoi(parts[2])
 		commitNumber, _ := strconv.Atoi(parts[3])
@@ -217,7 +207,7 @@ func (server *VsServer) handlePrepareResponse(viewNumber int, operationNumber in
 		server.state.RecordCommit(port, response)
 
 		// send response to client
-		server.udpHandler.Send(SERVER_RESPONSE_PREFIX+DELIMETER+response, port)
+		server.udpHandler.Send(server.state.BuildClientResponse(response), port)
 
 		// Broadcast about commit
 		commitMessage := server.state.BuildCommitMessage(clientTableValue.RequestNumber, port)
@@ -334,7 +324,6 @@ func (server *VsServer) processDoViewChangeMessage(message string, port int) {
 	}
 	majority := server.state.RecordDoViewChange(message, port)
 	if majority {
-		fmt.Println("majority for view change")
 		uncommitedLogs := server.state.UpdateForNewView()
 		// commit any pending logs
 		for _, log := range uncommitedLogs {

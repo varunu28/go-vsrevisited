@@ -314,6 +314,17 @@ func (state *ServerState) BuildStartViewRequest() string {
 		ToString()
 }
 
+func (state *ServerState) BuildClientResponse(response string) string {
+	sb := Text.StringBuilder{}
+
+	return sb.Append(SERVER_RESPONSE_PREFIX).
+		Append(DELIMETER).
+		AppendInt(state.viewNumber).
+		Append(DELIMETER).
+		Append(response).
+		ToString()
+}
+
 func (state *ServerState) UpdateStatus(status string) {
 	state.status = status
 }

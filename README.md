@@ -15,4 +15,6 @@ Golang implementation of Viewstamped Replication revisited protocol
  - [X] Add code for catching up on commits
  - [X] Add view change mechanism in case of server timeout
  - [X] Add Do view change mechanism to elect new leader node
- - [ ] Update client to update view on getting the response
+ - [X] Update client to update view on getting the response
+ - [ ] Test for 5 node cluster
+ - [ ] Code cleanup
