@@ -17,6 +17,7 @@ const (
 	COMMIT_MESSAGE_PREFIX                      = "commit_message"
 	CATCHUP_REQUEST_PREFIX                     = "catchup_request"
 	CATCHUP_RESPONSE_PREFIX                    = "catchup_response"
+	START_VIEW_CHANGE_PREFIX                   = "start_view_change"
 
 	// database operation status
 	INVALID_DATABASE_REQUEST      = "invalid_database_request"
@@ -24,7 +25,7 @@ const (
 	UPDATE_PERFORMED_SUCCESSFULLY = "update_performed_successfully"
 
 	// timeout values associated with server timeout
-	MIN_TIMEOUT = 10001
+	MIN_TIMEOUT = 5001
 	MAX_TIMEOUT = 20000
 
 	// server states

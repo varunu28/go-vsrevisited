@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -34,6 +35,7 @@ type ServerState struct {
 	clientTable     map[int]ClientTableValue
 	replicaNumber   int
 	voteTable       map[int]map[int]bool
+	viewChangeMap   map[int][]int
 }
 
 // NewServerState creates a new instance of ServerState on a given port number
@@ -56,6 +58,7 @@ func NewServerState(port int) *ServerState {
 		clientTable:     make(map[int]ClientTableValue),
 		replicaNumber:   replicaNumber,
 		voteTable:       make(map[int]map[int]bool),
+		viewChangeMap:   map[int][]int{},
 	}
 }
 
@@ -94,11 +97,19 @@ func (state *ServerState) InitializeVoteTable(clientPort int) {
 
 // Broadcast is invoked by the leader node to send a message to all peer nodes except itself.
 func (state *ServerState) Broadcast(message string, udpHandler *UdpHandler) {
+	if state.status == VIEW_CHANGE {
+		fmt.Println("BROADCASTING VIEW CHANGE")
+	}
 	for i := 0; i < NUMBER_OF_NODES; i++ {
 		if i != state.replicaNumber {
 			udpHandler.Send(message, STARTING_PORT+i)
 		}
 	}
+}
+
+func (state *ServerState) RecordViewChange(port int, viewNumber int) bool {
+	state.viewChangeMap[viewNumber] = append(state.viewChangeMap[viewNumber], port)
+	return len(state.viewChangeMap[viewNumber]) >= NUMBER_OF_NODES/2
 }
 
 // RecordPrepareResponse records the response from a replica node & returns a boolean value representing if quorum has been reached
@@ -192,6 +203,15 @@ func (state *ServerState) BuildCatchupResponse(replicaOperationNumber int, laggi
 		AppendInt(state.commitNumber).
 		Append(DELIMETER).
 		Append(strings.Join(state.log[replicaOperationNumber:laggingOperationNumber-1], ",")).
+		ToString()
+}
+
+func (state *ServerState) BuildStartViewChangeRequest() string {
+	sb := Text.StringBuilder{}
+
+	return sb.Append(START_VIEW_CHANGE_PREFIX).
+		Append(DELIMETER).
+		AppendInt(state.viewNumber).
 		ToString()
 }
 

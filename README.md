@@ -13,4 +13,5 @@ Golang implementation of Viewstamped Replication revisited protocol
  - [X] Add mechanism to catch up if replica node is out of date along with state change
  - [X] Add mechanism for clearing the buffer with state change
  - [X] Add code for catching up on commits
- - [ ] Add view change mechanism in case of server timeout
+ - [X] Add view change mechanism in case of server timeout
+ - [ ] Add Do view change mechanism to elect new leader node

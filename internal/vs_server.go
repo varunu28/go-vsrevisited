@@ -96,6 +96,10 @@ func (server *VsServer) handleMessage(message UdpMessage) {
 		commitNo, _ := strconv.Atoi(parts[1])
 		backupLogs := strings.Split(parts[2], ",")
 		server.processBackupLogs(backupLogs, commitNo)
+	} else if msgType == START_VIEW_CHANGE_PREFIX {
+		updatedViewNumber, _ := strconv.Atoi(parts[1])
+		port := message.FromPort
+		server.processStartViewChangeMessage(updatedViewNumber, port)
 	}
 }
 
@@ -210,7 +214,7 @@ func (server *VsServer) handleCommitMessage(viewNumber int, requestNumber int, p
 	// reset timeout as we received a ping from leader replica
 	server.serverTimeout.Reset <- struct{}{}
 
-	if server.state.GetStatus() == RECOVERING {
+	if server.state.GetStatus() != NORMAL {
 		return
 	}
 
@@ -262,6 +266,22 @@ func (server *VsServer) processBackupLogs(logs []string, commitNumber int) {
 	server.state.UpdateStatus(NORMAL)
 }
 
+func (server *VsServer) processStartViewChangeMessage(updatedViewNumber int, fromPort int) {
+	if updatedViewNumber >= server.state.viewNumber {
+		if updatedViewNumber > server.state.viewNumber {
+			server.state.viewNumber = updatedViewNumber
+			server.state.UpdateStatus(VIEW_CHANGE)
+			startViewChangeReq := server.state.BuildStartViewChangeRequest()
+			server.state.Broadcast(startViewChangeReq, server.udpHandler)
+		}
+		majority := server.state.RecordViewChange(fromPort, updatedViewNumber)
+		if majority {
+			// ToDo: Broadcast DoViewChange
+			fmt.Println("majority found")
+		}
+	}
+}
+
 func (server *VsServer) performServerOperation(request string) string {
 	response := server.database.PerformOperation(request)
 	return response
@@ -276,11 +296,23 @@ func (server *VsServer) serverTimer() {
 			} else {
 				// perform view change
 				fmt.Println("server timed out")
+				if server.state.GetStatus() == NORMAL {
+					server.startViewChange()
+				}
 			}
 		case <-server.serverTimeout.Reset:
 			server.serverTimeout.Timeout.Reset(time.Duration(server.serverTimeout.TimeoutInterval) * time.Millisecond)
 		}
 	}
+}
+
+func (server *VsServer) startViewChange() {
+	// update state for view change
+	server.state.viewNumber += 1
+	server.state.UpdateStatus(VIEW_CHANGE)
+	// Broadcast start view change request
+	startViewChangeReq := server.state.BuildStartViewChangeRequest()
+	server.state.Broadcast(startViewChangeReq, server.udpHandler)
 }
 
 func (server *VsServer) isLeader() bool {
