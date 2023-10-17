@@ -100,6 +100,24 @@ func (server *VsServer) handleMessage(message UdpMessage) {
 		updatedViewNumber, _ := strconv.Atoi(parts[1])
 		port := message.FromPort
 		server.processStartViewChangeMessage(updatedViewNumber, port)
+	} else if msgType == DO_VIEW_CHANGE_PREFIX {
+		server.processDoViewChangeMessage(message.Message, message.FromPort)
+	} else if msgType == START_VIEW_PREFIX {
+		// return sb.Append(START_VIEW_PREFIX).
+		// Append(DELIMETER).
+		// AppendInt(state.operationNumber).
+		// Append(DELIMETER).
+		// AppendInt(state.viewNumber).
+		// Append(DELIMETER).
+		// AppendInt(state.commitNumber).
+		// Append(DELIMETER).
+		// Append(strings.Join(state.log, ",")).
+		// ToString()
+		operationNumber, _ := strconv.Atoi(parts[1])
+		viewNumber, _ := strconv.Atoi(parts[2])
+		commitNumber, _ := strconv.Atoi(parts[3])
+		logs := strings.Split(parts[4], ",")
+		server.startNewView(operationNumber, viewNumber, commitNumber, logs)
 	}
 }
 
@@ -250,20 +268,24 @@ func (server *VsServer) processBackupLogs(logs []string, commitNumber int) {
 	// get updated on latest commit
 	for i := 0; i < commitNumber; i++ {
 		log := server.state.log[i]
-		splits := strings.Split(log, LOG_DELIMETER)
-		command := splits[0]
-		reqNo, _ := strconv.Atoi(splits[1])
-		port, _ := strconv.Atoi(splits[2])
-		response := server.performServerOperation(command)
-		ctValue, _ := server.state.GetClientTableValue(port)
-		if ctValue.RequestNumber == reqNo {
-			server.state.RecordCommit(port, response)
-		} else {
-			server.state.IncrementCommitNumber()
-		}
+		server.commitLog(log)
 	}
 	// update status
 	server.state.UpdateStatus(NORMAL)
+}
+
+func (server *VsServer) commitLog(log string) {
+	splits := strings.Split(log, LOG_DELIMETER)
+	command := splits[0]
+	reqNo, _ := strconv.Atoi(splits[1])
+	port, _ := strconv.Atoi(splits[2])
+	response := server.performServerOperation(command)
+	ctValue, _ := server.state.GetClientTableValue(port)
+	if ctValue.RequestNumber == reqNo {
+		server.state.RecordCommit(port, response)
+	} else {
+		server.state.IncrementCommitNumber()
+	}
 }
 
 func (server *VsServer) processStartViewChangeMessage(updatedViewNumber int, fromPort int) {
@@ -277,14 +299,53 @@ func (server *VsServer) processStartViewChangeMessage(updatedViewNumber int, fro
 		majority := server.state.RecordViewChange(fromPort, updatedViewNumber)
 		if majority {
 			// ToDo: Broadcast DoViewChange
-			fmt.Println("majority found")
+			server.initiateDoViewChange(updatedViewNumber)
 		}
 	}
+}
+
+func (server *VsServer) startNewView(operationNumber int, viewNumber int, commitNumber int, logs []string) {
+	server.state.UpdateView(operationNumber, viewNumber, commitNumber, logs)
+	server.state.UpdateStatus(NORMAL)
+	server.serverTimeout.Reset <- struct{}{}
+}
+
+func (server *VsServer) initiateDoViewChange(viewNumber int) {
+	newLeaderPort := STARTING_PORT + viewNumber%NUMBER_OF_NODES
+	// Assuming that the next replica in order is alive, old view number
+	// will be one less than the updated view number.
+	// This is not necessarily true as the next replica in order can also fail in which case,
+	// the replica next to it will be elected as leader
+	oldViewNumber := viewNumber - 1
+	doViewChangeRequest := server.state.BuildDoViewChangeRequest(oldViewNumber, viewNumber)
+	server.udpHandler.Send(doViewChangeRequest, newLeaderPort)
 }
 
 func (server *VsServer) performServerOperation(request string) string {
 	response := server.database.PerformOperation(request)
 	return response
+}
+
+func (server *VsServer) processDoViewChangeMessage(message string, port int) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	if server.state.GetStatus() == NORMAL {
+		return
+	}
+	majority := server.state.RecordDoViewChange(message, port)
+	if majority {
+		fmt.Println("majority for view change")
+		uncommitedLogs := server.state.UpdateForNewView()
+		// commit any pending logs
+		for _, log := range uncommitedLogs {
+			server.commitLog(log)
+		}
+		// update status to normal
+		server.state.UpdateStatus(NORMAL)
+		// broadcast start view message
+		startViewRequest := server.state.BuildStartViewRequest()
+		server.state.Broadcast(startViewRequest, server.udpHandler)
+	}
 }
 
 func (server *VsServer) serverTimer() {

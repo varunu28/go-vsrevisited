@@ -14,4 +14,5 @@ Golang implementation of Viewstamped Replication revisited protocol
  - [X] Add mechanism for clearing the buffer with state change
  - [X] Add code for catching up on commits
  - [X] Add view change mechanism in case of server timeout
- - [ ] Add Do view change mechanism to elect new leader node
+ - [X] Add Do view change mechanism to elect new leader node
+ - [ ] Update client to update view on getting the response

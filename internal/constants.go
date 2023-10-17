@@ -18,6 +18,8 @@ const (
 	CATCHUP_REQUEST_PREFIX                     = "catchup_request"
 	CATCHUP_RESPONSE_PREFIX                    = "catchup_response"
 	START_VIEW_CHANGE_PREFIX                   = "start_view_change"
+	DO_VIEW_CHANGE_PREFIX                      = "do_view_change"
+	START_VIEW_PREFIX                          = "start_view"
 
 	// database operation status
 	INVALID_DATABASE_REQUEST      = "invalid_database_request"

@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +12,14 @@ type ClientTableValue struct {
 	Request       string
 	RequestNumber int
 	Response      string
+}
+
+type doViewChange struct {
+	oldViewNumber   int
+	newViewNumber   int
+	operationNumber int
+	commitNumber    int
+	logs            []string
 }
 
 // ServerState struct is tied to each replica. It consists of:
@@ -36,6 +43,7 @@ type ServerState struct {
 	replicaNumber   int
 	voteTable       map[int]map[int]bool
 	viewChangeMap   map[int][]int
+	doViewChangeMap map[int]doViewChange
 }
 
 // NewServerState creates a new instance of ServerState on a given port number
@@ -59,6 +67,7 @@ func NewServerState(port int) *ServerState {
 		replicaNumber:   replicaNumber,
 		voteTable:       make(map[int]map[int]bool),
 		viewChangeMap:   map[int][]int{},
+		doViewChangeMap: make(map[int]doViewChange),
 	}
 }
 
@@ -97,9 +106,6 @@ func (state *ServerState) InitializeVoteTable(clientPort int) {
 
 // Broadcast is invoked by the leader node to send a message to all peer nodes except itself.
 func (state *ServerState) Broadcast(message string, udpHandler *UdpHandler) {
-	if state.status == VIEW_CHANGE {
-		fmt.Println("BROADCASTING VIEW CHANGE")
-	}
 	for i := 0; i < NUMBER_OF_NODES; i++ {
 		if i != state.replicaNumber {
 			udpHandler.Send(message, STARTING_PORT+i)
@@ -129,6 +135,67 @@ func (state *ServerState) RecordCommit(port int, response string) {
 
 func (state *ServerState) IncrementCommitNumber() {
 	state.commitNumber += 1
+}
+
+func (state *ServerState) RecordDoViewChange(message string, port int) bool {
+	parts := strings.Split(message, DELIMETER)
+
+	oldViewNumber, _ := strconv.Atoi(parts[1])
+	newViewNumber, _ := strconv.Atoi(parts[2])
+	operationNumber, _ := strconv.Atoi(parts[3])
+	commitNumber, _ := strconv.Atoi(parts[4])
+	logs := strings.Split(parts[5], ",")
+	doViewChange := &doViewChange{
+		oldViewNumber:   oldViewNumber,
+		newViewNumber:   newViewNumber,
+		operationNumber: operationNumber,
+		commitNumber:    commitNumber,
+		logs:            logs,
+	}
+	state.doViewChangeMap[port] = *doViewChange
+	return len(state.doViewChangeMap) >= NUMBER_OF_NODES/2
+}
+
+func (state *ServerState) UpdateForNewView() []string {
+	// get nodes with highest old view number
+	maxViewNum := 0
+	for _, v := range state.doViewChangeMap {
+		if maxViewNum < v.oldViewNumber {
+			maxViewNum = v.oldViewNumber
+		}
+	}
+	highestOldViewNodes := make([]int, 0)
+	for k, v := range state.doViewChangeMap {
+		if v.oldViewNumber == maxViewNum {
+			highestOldViewNodes = append(highestOldViewNodes, k)
+		}
+	}
+	// get node with highest operation number
+	nodeWithHighestOpNumber := highestOldViewNodes[0]
+	for _, node := range highestOldViewNodes {
+		if state.doViewChangeMap[node].operationNumber > state.doViewChangeMap[nodeWithHighestOpNumber].operationNumber {
+			nodeWithHighestOpNumber = node
+		}
+	}
+	// list the logs that need to be committed by comparing the commit number
+	state.log = state.doViewChangeMap[nodeWithHighestOpNumber].logs
+	// change view number & operation number
+	state.viewNumber = state.doViewChangeMap[nodeWithHighestOpNumber].newViewNumber
+	state.operationNumber = state.doViewChangeMap[nodeWithHighestOpNumber].operationNumber
+	// return logs to be committed
+	latestCommitNumber := state.doViewChangeMap[nodeWithHighestOpNumber].commitNumber
+	uncommittedLogs := state.log[state.operationNumber-1 : latestCommitNumber]
+	// reset do view change map
+	state.doViewChangeMap = make(map[int]doViewChange)
+
+	return uncommittedLogs
+}
+
+func (state *ServerState) UpdateView(operationNumber int, viewNumber int, commitNumber int, logs []string) {
+	state.viewNumber = viewNumber
+	state.operationNumber = operationNumber
+	state.commitNumber = commitNumber
+	state.log = logs
 }
 
 // BuildPrepareResponse prepares a string representation for response of PrepareRequest
@@ -212,6 +279,38 @@ func (state *ServerState) BuildStartViewChangeRequest() string {
 	return sb.Append(START_VIEW_CHANGE_PREFIX).
 		Append(DELIMETER).
 		AppendInt(state.viewNumber).
+		ToString()
+}
+
+func (state *ServerState) BuildDoViewChangeRequest(oldViewNumber int, newViewNumber int) string {
+	sb := Text.StringBuilder{}
+
+	return sb.Append(DO_VIEW_CHANGE_PREFIX).
+		Append(DELIMETER).
+		AppendInt(oldViewNumber).
+		Append(DELIMETER).
+		AppendInt(newViewNumber).
+		Append(DELIMETER).
+		AppendInt(state.operationNumber).
+		Append(DELIMETER).
+		AppendInt(state.commitNumber).
+		Append(DELIMETER).
+		Append(strings.Join(state.log, ",")).
+		ToString()
+}
+
+func (state *ServerState) BuildStartViewRequest() string {
+	sb := Text.StringBuilder{}
+
+	return sb.Append(START_VIEW_PREFIX).
+		Append(DELIMETER).
+		AppendInt(state.operationNumber).
+		Append(DELIMETER).
+		AppendInt(state.viewNumber).
+		Append(DELIMETER).
+		AppendInt(state.commitNumber).
+		Append(DELIMETER).
+		Append(strings.Join(state.log, ",")).
 		ToString()
 }
 
