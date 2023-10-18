@@ -10,6 +10,7 @@ type Database struct {
 	mu    sync.Mutex
 }
 
+// NewDatabase creates a new instance of Database struct
 func NewDatabase() *Database {
 	return &Database{
 		store: make(map[string]string),
@@ -17,6 +18,8 @@ func NewDatabase() *Database {
 	}
 }
 
+// PerformOperation is responsible for performing the operation on database.
+// It also is responsible for validating the operation before applying it on the database.
 func (db *Database) PerformOperation(operation string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()

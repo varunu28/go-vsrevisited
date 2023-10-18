@@ -282,6 +282,11 @@ func (server *VsServer) commitLog(log string) {
 	}
 }
 
+func (server *VsServer) performServerOperation(request string) string {
+	response := server.database.PerformOperation(request)
+	return response
+}
+
 func (server *VsServer) processStartViewChangeMessage(updatedViewNumber int, fromPort int) {
 	if updatedViewNumber >= server.state.viewNumber {
 		if updatedViewNumber > server.state.viewNumber {
@@ -292,16 +297,9 @@ func (server *VsServer) processStartViewChangeMessage(updatedViewNumber int, fro
 		}
 		majority := server.state.RecordViewChange(fromPort, updatedViewNumber)
 		if majority {
-			// ToDo: Broadcast DoViewChange
 			server.initiateDoViewChange(updatedViewNumber)
 		}
 	}
-}
-
-func (server *VsServer) startNewView(operationNumber int, viewNumber int, commitNumber int, logs []string) {
-	server.state.UpdateView(operationNumber, viewNumber, commitNumber, logs)
-	server.state.UpdateStatus(NORMAL)
-	server.serverTimeout.Reset <- struct{}{}
 }
 
 func (server *VsServer) initiateDoViewChange(viewNumber int) {
@@ -315,17 +313,14 @@ func (server *VsServer) initiateDoViewChange(viewNumber int) {
 	server.udpHandler.Send(doViewChangeRequest, newLeaderPort)
 }
 
-func (server *VsServer) performServerOperation(request string) string {
-	response := server.database.PerformOperation(request)
-	return response
-}
-
 func (server *VsServer) processDoViewChangeMessage(message string, port int) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
+
 	if server.state.GetStatus() == NORMAL {
 		return
 	}
+
 	majority := server.state.RecordDoViewChange(message, port)
 	if majority {
 		uncommitedLogs := server.state.UpdateForNewView()
@@ -339,6 +334,12 @@ func (server *VsServer) processDoViewChangeMessage(message string, port int) {
 		startViewRequest := server.state.BuildStartViewRequest()
 		server.state.Broadcast(startViewRequest, server.udpHandler)
 	}
+}
+
+func (server *VsServer) startNewView(operationNumber int, viewNumber int, commitNumber int, logs []string) {
+	server.state.UpdateView(operationNumber, viewNumber, commitNumber, logs)
+	server.state.UpdateStatus(NORMAL)
+	server.serverTimeout.Reset <- struct{}{}
 }
 
 func (server *VsServer) serverTimer() {

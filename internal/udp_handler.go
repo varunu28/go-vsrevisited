@@ -38,6 +38,9 @@ func NewUdpHandler(port int) (*UdpHandler, error) {
 	}, nil
 }
 
+// RecieveWithTimeout listens on the port for UdpHandler for a defined time duration
+// If it receives a message within the time duration then it returns a UdpMessage instance
+// by parsing the incoming message. Else it returns an error
 func (u *UdpHandler) RecieveWithTimeout(timeout time.Duration) (UdpMessage, error) {
 	err := u.socket.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {

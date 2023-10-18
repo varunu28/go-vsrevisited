@@ -36,11 +36,11 @@ func NewClientState(port int) *ClientState {
 func (state *ClientState) BuildClientRequest(input string) string {
 	sb := Text.StringBuilder{}
 
-	sb.Append(CLIENT_REQUEST_PREFIX)
-	sb.Append(DELIMETER)
-	sb.Append(input)
-	sb.Append(DELIMETER)
-	sb.Append(strconv.Itoa(state.currentRequestNumber))
+	sb.Append(CLIENT_REQUEST_PREFIX).
+		Append(DELIMETER).
+		Append(input).
+		Append(DELIMETER).
+		Append(strconv.Itoa(state.currentRequestNumber))
 
 	state.currentRequestNumber += 1
 
@@ -54,10 +54,12 @@ func (state *ClientState) Broadcast(clientRequest string, udpHandler *UdpHandler
 	}
 }
 
+// RecordViewNumber records the view number it receives as part of the server response
 func (state *ClientState) RecordViewNumber(viewNumber int) {
 	state.currentViewNumber = viewNumber
 }
 
+// GetLeaderPort calculates the port for current leader in protocol
 func (state *ClientState) GetLeaderPort() int {
 	return STARTING_PORT + state.currentViewNumber%NUMBER_OF_NODES
 }

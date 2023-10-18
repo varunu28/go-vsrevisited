@@ -103,13 +103,6 @@ func (state *ServerState) RecordRequest(command string, requestNumber int, port 
 	state.clientTable[port] = *ctValue
 }
 
-func (state *ServerState) InitializeVoteTable(clientPort int) {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-
-	state.voteTable[clientPort] = make(map[int]bool)
-}
-
 // Broadcast is invoked by the leader node to send a message to all peer nodes except itself.
 func (state *ServerState) Broadcast(message string, udpHandler *UdpHandler) {
 	for i := 0; i < NUMBER_OF_NODES; i++ {
@@ -119,12 +112,13 @@ func (state *ServerState) Broadcast(message string, udpHandler *UdpHandler) {
 	}
 }
 
-func (state *ServerState) RecordViewChange(port int, viewNumber int) bool {
+// InitializeVoteTable initializes a map with key equal to port of client.
+// This is done to calcualte quorum for a client operation from other replica nodes.
+func (state *ServerState) InitializeVoteTable(clientPort int) {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
-	state.viewChangeMap[viewNumber] = append(state.viewChangeMap[viewNumber], port)
-	return len(state.viewChangeMap[viewNumber]) >= NUMBER_OF_NODES/2
+	state.voteTable[clientPort] = make(map[int]bool)
 }
 
 // RecordPrepareResponse records the response from a replica node & returns a boolean value representing if quorum has been reached
@@ -136,6 +130,7 @@ func (state *ServerState) RecordPrepareResponse(port int, replicaId int) bool {
 	return len(state.voteTable[port]) >= NUMBER_OF_NODES/2
 }
 
+// RecordCommit commits the client operation & updates the client table with response
 func (state *ServerState) RecordCommit(port int, response string) {
 	state.mu.Lock()
 	defer state.mu.Unlock()
@@ -148,10 +143,23 @@ func (state *ServerState) RecordCommit(port int, response string) {
 	state.clientTable[port] = ctValue
 }
 
+// IncrementCommitNumber increments the commit number for server state by 1
 func (state *ServerState) IncrementCommitNumber() {
 	state.commitNumber += 1
 }
 
+// RecordViewChange keeps track of start view change messages & for calculating quorum on how many
+// replicas are in agreement that current leader is down.
+func (state *ServerState) RecordViewChange(port int, viewNumber int) bool {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	state.viewChangeMap[viewNumber] = append(state.viewChangeMap[viewNumber], port)
+	return len(state.viewChangeMap[viewNumber]) >= NUMBER_OF_NODES/2
+}
+
+// RecordDoViewChange records the response from replica to the next node in configuration.
+// Once the next node in order gets a quorum for do_view_change, it can promote itself to leader
 func (state *ServerState) RecordDoViewChange(message string, port int) bool {
 	state.mu.Lock()
 	defer state.mu.Unlock()
@@ -174,6 +182,8 @@ func (state *ServerState) RecordDoViewChange(message string, port int) bool {
 	return len(state.doViewChangeMap) >= NUMBER_OF_NODES/2
 }
 
+// UpdateForNewView updates the state for newly elected leader replica.
+// It is responsible for processing the start_view_change responses from all replicas & calculating its new state.
 func (state *ServerState) UpdateForNewView() []string {
 	state.mu.Lock()
 	defer state.mu.Unlock()
@@ -215,11 +225,22 @@ func (state *ServerState) UpdateForNewView() []string {
 	return uncommittedLogs
 }
 
+// UpdateView updates the state for a replica node whenever a view change occurs
 func (state *ServerState) UpdateView(operationNumber int, viewNumber int, commitNumber int, logs []string) {
 	state.viewNumber = viewNumber
 	state.operationNumber = operationNumber
 	state.commitNumber = commitNumber
 	state.log = logs
+}
+
+// UpdateStatus is responsible for setting the status of the server to a given string
+func (state *ServerState) UpdateStatus(status string) {
+	state.status = status
+}
+
+// GetStatus returns the current status of the server
+func (state *ServerState) GetStatus() string {
+	return state.status
 }
 
 // BuildPrepareResponse prepares a string representation for response of PrepareRequest
@@ -297,6 +318,7 @@ func (state *ServerState) BuildCatchupResponse(replicaOperationNumber int, laggi
 		ToString()
 }
 
+// BuildStartViewChangeRequest prepares a string representation of start view change request
 func (state *ServerState) BuildStartViewChangeRequest() string {
 	sb := Text.StringBuilder{}
 
@@ -306,6 +328,7 @@ func (state *ServerState) BuildStartViewChangeRequest() string {
 		ToString()
 }
 
+// BuildDoViewChangeRequest prepares a string representation of do view change request
 func (state *ServerState) BuildDoViewChangeRequest(oldViewNumber int, newViewNumber int) string {
 	sb := Text.StringBuilder{}
 
@@ -323,6 +346,7 @@ func (state *ServerState) BuildDoViewChangeRequest(oldViewNumber int, newViewNum
 		ToString()
 }
 
+// BuildStartViewRequest prepares a string representation of start view request
 func (state *ServerState) BuildStartViewRequest() string {
 	sb := Text.StringBuilder{}
 
@@ -338,6 +362,7 @@ func (state *ServerState) BuildStartViewRequest() string {
 		ToString()
 }
 
+// BuildClientResponse prepares a string representation of client response
 func (state *ServerState) BuildClientResponse(response string) string {
 	sb := Text.StringBuilder{}
 
@@ -347,12 +372,4 @@ func (state *ServerState) BuildClientResponse(response string) string {
 		Append(DELIMETER).
 		Append(response).
 		ToString()
-}
-
-func (state *ServerState) UpdateStatus(status string) {
-	state.status = status
-}
-
-func (state *ServerState) GetStatus() string {
-	return state.status
 }
