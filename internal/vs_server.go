@@ -144,8 +144,12 @@ func (server *VsServer) handleClientRequest(command string, currentRequestNumber
 }
 
 func (server *VsServer) handlePrepareRequest(viewNumber int, command string, requestNumber int, port int, operationNumber int, commitNumber int, fromPort int) {
-	if viewNumber != server.state.viewNumber {
+	if viewNumber < server.state.viewNumber {
 		return
+	}
+	// view change has occurred
+	if viewNumber > server.state.viewNumber {
+		server.state.viewNumber = viewNumber
 	}
 	// reset timeout as we received a ping from leader replica
 	server.serverTimeout.Reset <- struct{}{}

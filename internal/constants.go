@@ -2,7 +2,7 @@ package internal
 
 const (
 	// cluster configuration
-	NUMBER_OF_NODES = 3
+	NUMBER_OF_NODES = 5
 	STARTING_PORT   = 8000
 
 	// constants for request

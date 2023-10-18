@@ -3,6 +3,7 @@ package internal
 import (
 	"strconv"
 	"strings"
+	"sync"
 
 	Text "github.com/linkdotnet/golang-stringbuilder"
 )
@@ -44,6 +45,7 @@ type ServerState struct {
 	voteTable       map[int]map[int]bool
 	viewChangeMap   map[int][]int
 	doViewChangeMap map[int]doViewChange
+	mu              sync.Mutex
 }
 
 // NewServerState creates a new instance of ServerState on a given port number
@@ -68,6 +70,7 @@ func NewServerState(port int) *ServerState {
 		voteTable:       make(map[int]map[int]bool),
 		viewChangeMap:   map[int][]int{},
 		doViewChangeMap: make(map[int]doViewChange),
+		mu:              sync.Mutex{},
 	}
 }
 
@@ -101,6 +104,9 @@ func (state *ServerState) RecordRequest(command string, requestNumber int, port 
 }
 
 func (state *ServerState) InitializeVoteTable(clientPort int) {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	state.voteTable[clientPort] = make(map[int]bool)
 }
 
@@ -114,17 +120,26 @@ func (state *ServerState) Broadcast(message string, udpHandler *UdpHandler) {
 }
 
 func (state *ServerState) RecordViewChange(port int, viewNumber int) bool {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	state.viewChangeMap[viewNumber] = append(state.viewChangeMap[viewNumber], port)
 	return len(state.viewChangeMap[viewNumber]) >= NUMBER_OF_NODES/2
 }
 
 // RecordPrepareResponse records the response from a replica node & returns a boolean value representing if quorum has been reached
 func (state *ServerState) RecordPrepareResponse(port int, replicaId int) bool {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	state.voteTable[port][replicaId] = true
 	return len(state.voteTable[port]) >= NUMBER_OF_NODES/2
 }
 
 func (state *ServerState) RecordCommit(port int, response string) {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	// increment commit number
 	state.IncrementCommitNumber()
 	// update client table
@@ -138,6 +153,9 @@ func (state *ServerState) IncrementCommitNumber() {
 }
 
 func (state *ServerState) RecordDoViewChange(message string, port int) bool {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	parts := strings.Split(message, DELIMETER)
 
 	oldViewNumber, _ := strconv.Atoi(parts[1])
@@ -157,6 +175,9 @@ func (state *ServerState) RecordDoViewChange(message string, port int) bool {
 }
 
 func (state *ServerState) UpdateForNewView() []string {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	// get nodes with highest old view number
 	maxViewNum := 0
 	for _, v := range state.doViewChangeMap {
@@ -184,7 +205,10 @@ func (state *ServerState) UpdateForNewView() []string {
 	state.operationNumber = state.doViewChangeMap[nodeWithHighestOpNumber].operationNumber
 	// return logs to be committed
 	latestCommitNumber := state.doViewChangeMap[nodeWithHighestOpNumber].commitNumber
-	uncommittedLogs := state.log[state.operationNumber-1 : latestCommitNumber]
+	uncommittedLogs := make([]string, 0)
+	if state.commitNumber+1 < latestCommitNumber {
+		uncommittedLogs = state.log[state.commitNumber+1 : latestCommitNumber]
+	}
 	// reset do view change map
 	state.doViewChangeMap = make(map[int]doViewChange)
 
