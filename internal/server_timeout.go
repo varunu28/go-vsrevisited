@@ -8,6 +8,7 @@ type ServerTimeout struct {
 	TimeoutInterval int
 }
 
+// NewServerTimeout creates a new instance of ServerTimeout struct
 func NewServerTimeout(timeoutInterval int) *ServerTimeout {
 	return &ServerTimeout{
 		Timeout:         time.NewTicker(time.Duration(timeoutInterval) * time.Millisecond),

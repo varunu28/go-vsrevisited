@@ -62,7 +62,7 @@ func (server *VsServer) Start() {
 }
 
 func (server *VsServer) handleMessage(message UdpMessage) {
-	fmt.Println("received message: ", message.Message)
+	fmt.Println("[received message] ", message.Message)
 	parts := strings.Split(message.Message, DELIMETER)
 	msgType := parts[0]
 	if msgType == CLIENT_REQUEST_PREFIX {
@@ -233,7 +233,7 @@ func (server *VsServer) handleCommitMessage(viewNumber int, requestNumber int, p
 	clientTableValue, exists := server.state.GetClientTableValue(port)
 	if exists {
 		if clientTableValue.RequestNumber != requestNumber {
-			fmt.Printf("got out of range request number. got %d current %d\n", requestNumber, clientTableValue.RequestNumber)
+			fmt.Printf("[commit_message_error] got out of range request number. got %d current %d\n", requestNumber, clientTableValue.RequestNumber)
 			return
 		}
 		// perform commit
@@ -350,7 +350,7 @@ func (server *VsServer) serverTimer() {
 				server.serverTimeout.Reset <- struct{}{}
 			} else {
 				// perform view change
-				fmt.Println("server timed out")
+				fmt.Println("[replica_error] leader server timed out")
 				if server.state.GetStatus() == NORMAL {
 					server.startViewChange()
 				}

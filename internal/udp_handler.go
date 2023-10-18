@@ -2,7 +2,6 @@ package internal
 
 import (
 	"bytes"
-	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -42,10 +41,7 @@ func NewUdpHandler(port int) (*UdpHandler, error) {
 // If it receives a message within the time duration then it returns a UdpMessage instance
 // by parsing the incoming message. Else it returns an error
 func (u *UdpHandler) RecieveWithTimeout(timeout time.Duration) (UdpMessage, error) {
-	err := u.socket.SetReadDeadline(time.Now().Add(timeout))
-	if err != nil {
-		fmt.Println("error setting deadline: ", err)
-	}
+	u.socket.SetReadDeadline(time.Now().Add(timeout))
 	data := make([]byte, 1024)
 	_, addr, err := u.socket.ReadFromUDP(data)
 	if err != nil {

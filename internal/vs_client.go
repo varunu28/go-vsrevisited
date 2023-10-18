@@ -50,11 +50,7 @@ func (client *VsClient) Start() {
 
 		// send message to leader node
 		clientRequest := client.state.BuildClientRequest(input)
-		err = client.udp_handler.Send(clientRequest, client.state.GetLeaderPort())
-		if err != nil {
-			fmt.Println(err.Error())
-			continue
-		}
+		client.udp_handler.Send(clientRequest, client.state.GetLeaderPort())
 
 		// read response for message
 		client.receive(clientRequest)
@@ -71,13 +67,13 @@ func (client *VsClient) receive(clientRequest string) {
 			// invoke receive
 			client.receive(clientRequest)
 		} else {
-			fmt.Println("error: ", err)
+			fmt.Println("[receive_error] ", err)
 		}
 	} else {
 		parts := strings.Split(message.Message, DELIMETER)
 		viewNumber, _ := strconv.Atoi(parts[1])
 		response := parts[2]
 		client.state.RecordViewNumber(viewNumber)
-		fmt.Println("response: " + response)
+		fmt.Println("[server_response] " + response)
 	}
 }
