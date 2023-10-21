@@ -30,3 +30,7 @@ go build
 
 #### Second view change. (Node on port 8002 becomes leader)
 ![Second View change](demo/View%20Change%20In%20Order.gif)
+
+## ToDo 
+ - [ ] Add optimization for storing state on disk for faster recovery
+ - [ ] Implement the reconfiguration protocol
