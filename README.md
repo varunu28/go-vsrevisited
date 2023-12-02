@@ -1,5 +1,5 @@
 # go-vsrevisited
-Golang implementation of [Viewstamped Replication revisited](https://pmg.csail.mit.edu/papers/vr-revisited.pdf) protocol
+Golang implementation of [Viewstamped Replication revisited](https://pmg.csail.mit.edu/papers/vr-revisited.pdf) protocol. Covered under blogpost [Implementing Viewstamped Replication](https://distributed-computing-musings.com/2023/10/implementing-viewstamped-replication-protocol/)
 
 ## How to run?
 ```
